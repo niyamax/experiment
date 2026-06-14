@@ -43,7 +43,12 @@ export function exportCanvasPNG(filename = 'stamp-print.png') {
     ctx.restore();
   }
 
-  out.toBlob((blob) => {
+  downloadCanvasPNG(out, filename);
+}
+
+/** Download any canvas as a PNG file. */
+export function downloadCanvasPNG(canvas: HTMLCanvasElement, filename = 'stamp.png') {
+  canvas.toBlob((blob) => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

@@ -9,8 +9,10 @@ import { studio } from '../engine/studio';
 import { ALL_STAMPS, COLLECTIONS } from '../data/library';
 import type { LibraryStamp } from '../core/types';
 import { CarveView, GOUGES } from './carveView';
-import { exportCanvasPNG } from './export';
+import { exportCanvasPNG, downloadCanvasPNG } from './export';
 import { isMuted, setMuted } from './sound';
+import { fillVisibleRegion, renderSeamlessTile } from '../engine/tiling';
+import type { TileLayout } from '../core/types';
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: 'carve', label: 'Carve', hint: 'Gouge your block' },
@@ -235,10 +237,93 @@ function renderLibrary(panel: HTMLElement) {
   panel.appendChild(grid);
 }
 
+const LAYOUTS: { id: TileLayout; label: string }[] = [
+  { id: 'grid', label: 'Grid' },
+  { id: 'half-drop', label: 'Half-drop' },
+  { id: 'brick', label: 'Brick' },
+  { id: 'mirror', label: 'Mirror' },
+  { id: 'radial', label: 'Radial' },
+];
+
+// spacing slider value is a multiple of tile size (0.6 – 1.4)
+let patternSpacingMul = 1;
+
 function renderPattern(panel: HTMLElement) {
-  panel.append(panelTitle('Pattern', 'Fill the view with a seamless repeat.'));
-  panel.appendChild(note('The Pattern module wires up seamless tiling here.'));
-  panel.appendChild(button('Back to press', 'ghost-btn', () => store.set({ mode: 'press' })));
+  panel.append(panelTitle('Pattern', 'Lay your motif down as a flawless seamless repeat.'));
+
+  if (studio.block.isBlank()) {
+    panel.appendChild(
+      note('Your block is blank. Carve a motif or pick one from the Library before tiling.'),
+    );
+    const row = el('div', 'btn-row');
+    row.append(
+      button('Carve', 'ghost-btn', () => store.set({ mode: 'carve' })),
+      button('Library', 'ghost-btn', () => store.set({ mode: 'library' })),
+    );
+    panel.appendChild(row);
+    return;
+  }
+
+  panel.appendChild(label('Ink'));
+  panel.appendChild(swatches());
+
+  // ---- layout chooser ----
+  panel.appendChild(label('Layout'));
+  const chips = el('div', 'chip-row');
+  for (const lay of LAYOUTS) {
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.textContent = lay.label;
+    chip.dataset.layout = lay.id;
+    chip.classList.toggle('active', lay.id === store.get().tileLayout);
+    chip.onclick = () => {
+      store.set({ tileLayout: lay.id });
+      chips.querySelectorAll<HTMLButtonElement>('.chip').forEach((c) =>
+        c.classList.toggle('active', c.dataset.layout === lay.id),
+      );
+    };
+    chips.appendChild(chip);
+  }
+  panel.appendChild(chips);
+
+  // ---- tile size ----
+  panel.appendChild(label('Tile size'));
+  panel.appendChild(
+    slider(80, 420, store.get().pressSize, (v) => store.set({ pressSize: v })),
+  );
+
+  // ---- spacing (multiple of tile size) ----
+  panel.appendChild(label('Spacing'));
+  panel.appendChild(
+    slider(60, 140, Math.round(patternSpacingMul * 100), (v) => {
+      patternSpacingMul = v / 100;
+    }),
+  );
+
+  // ---- primary fill ----
+  panel.appendChild(
+    button('Fill view', 'primary-btn', () => {
+      const tileSize = store.get().pressSize;
+      fillVisibleRegion(store.get().tileLayout, {
+        spacing: tileSize * patternSpacingMul,
+        tileSize,
+        jitter: 0,
+      });
+    }),
+  );
+
+  // ---- secondary actions ----
+  const row = el('div', 'btn-row');
+  row.append(
+    button('Clear canvas', 'ghost-btn', () => store.update((s) => (s.impressions = []))),
+    button('Export tile', 'ghost-btn', () => {
+      const tile = renderSeamlessTile(store.get().pressSize, store.get().tileLayout);
+      downloadCanvasPNG(tile, `stamp-tile-${store.get().tileLayout}.png`);
+    }),
+  );
+  panel.appendChild(row);
+
+  panel.appendChild(button('Export PNG', 'ghost-btn', () => exportCanvasPNG()));
 }
 
 // ---- small UI helpers ------------------------------------------------------
