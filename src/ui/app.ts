@@ -23,6 +23,12 @@ const MODES: { id: Mode; label: string; hint: string }[] = [
 
 export function mountApp(root: HTMLElement) {
   root.innerHTML = '';
+
+  // Delightful first run: load a beautiful motif so the very first press
+  // already looks hand-cut (rather than a blank/solid block).
+  const seed = ALL_STAMPS.find((s) => s.id === 'fern') ?? ALL_STAMPS.find((s) => s.id === 'leaf');
+  if (seed) studio.block.loadStamp(seed);
+
   const shell = el('div', 'shell');
 
   // ---- top bar -------------------------------------------------------------
@@ -71,6 +77,76 @@ export function mountApp(root: HTMLElement) {
     button('+', 'round-btn', () => scene.zoomAt(scene.width / 2, scene.height / 2, 1.18)),
   );
   stage.appendChild(zoomDock);
+
+  // ---- empty-canvas onboarding hint ---------------------------------------
+  const onboard = el('div', 'onboard');
+  onboard.innerHTML =
+    `<div class="onboard-card">` +
+    `<div class="onboard-title">Press your first stamp</div>` +
+    `<div class="onboard-hint">Click anywhere to press · drag to repeat · ` +
+    `Space to pan · scroll to zoom</div>` +
+    `</div>`;
+  stage.appendChild(onboard);
+  const syncOnboard = () => {
+    const empty = store.get().impressions.length === 0;
+    onboard.classList.toggle('hidden', !empty);
+  };
+  syncOnboard();
+  store.subscribe(syncOnboard);
+
+  // subtle "stamp down" feedback whenever a fresh impression lands
+  let lastImpCount = store.get().impressions.length;
+  let flashTimer = 0;
+  store.subscribe((s) => {
+    if (s.impressions.length > lastImpCount) {
+      stage.classList.remove('pressed');
+      // force reflow so the animation can retrigger on rapid presses
+      void stage.offsetWidth;
+      stage.classList.add('pressed');
+      clearTimeout(flashTimer);
+      flashTimer = window.setTimeout(() => stage.classList.remove('pressed'), 180);
+    }
+    lastImpCount = s.impressions.length;
+  });
+
+  // ---- keyboard shortcuts --------------------------------------------------
+  const MODE_KEYS: Record<string, Mode> = {
+    Digit1: 'carve',
+    Digit2: 'press',
+    Digit3: 'library',
+    Digit4: 'pattern',
+  };
+  window.addEventListener('keydown', (e) => {
+    if (isTypingTarget(e)) return;
+
+    // mode switching: 1/2/3/4
+    const m = MODE_KEYS[e.code];
+    if (m) {
+      store.set({ mode: m });
+      e.preventDefault();
+      return;
+    }
+
+    // undo: Cmd/Ctrl+Z — carve block in carve mode, else pop last impression
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+      if (store.get().mode === 'carve') studio.block.undo();
+      else studio.undoLast();
+      e.preventDefault();
+      return;
+    }
+
+    // Backspace / Delete: pop last impression
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      if (studio.undoLast()) e.preventDefault();
+      return;
+    }
+
+    // R: re-ink
+    if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) {
+      studio.reink();
+      e.preventDefault();
+    }
+  });
 
   const carveView = new CarveView();
 
@@ -172,11 +248,24 @@ function renderPress(panel: HTMLElement) {
   store.subscribe(syncMeter);
 
   const row = el('div', 'btn-row');
+  const undoBtn = button('Undo press', 'ghost-btn', () => studio.undoLast());
   row.append(
+    undoBtn,
     button('Edit block', 'ghost-btn', () => store.set({ mode: 'carve' })),
-    button('Clear canvas', 'ghost-btn', () => store.update((s) => (s.impressions = []))),
   );
   panel.appendChild(row);
+  // disable Undo press when there's nothing to undo
+  const syncUndo = () => {
+    undoBtn.disabled = store.get().impressions.length === 0;
+  };
+  syncUndo();
+  store.subscribe(syncUndo);
+
+  const row2 = el('div', 'btn-row');
+  row2.append(
+    button('Clear canvas', 'ghost-btn', () => store.update((s) => (s.impressions = []))),
+  );
+  panel.appendChild(row2);
   panel.appendChild(button('Export PNG', 'primary-btn', () => exportCanvasPNG()));
 }
 
@@ -395,4 +484,9 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLEle
   const e = document.createElement(tag);
   e.className = cls;
   return e;
+}
+
+function isTypingTarget(e: KeyboardEvent): boolean {
+  const t = e.target as HTMLElement | null;
+  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
 }

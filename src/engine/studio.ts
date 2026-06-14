@@ -11,8 +11,34 @@ class Studio {
   block: Block;
   private pressCount = 0;
 
+  // cached preview raster (rebuilt only when block/ink/size change)
+  private previewRaster: HTMLCanvasElement | null = null;
+  private previewKey = '';
+
   constructor() {
     this.block = new Block(store.get().blockSize);
+  }
+
+  /**
+   * A clean (no-wobble) raster of the current block + ink at `size`, cached so
+   * it can be drawn under the cursor cheaply on every pointermove.
+   * Returns null when the block is blank.
+   */
+  previewImpression(size: number): HTMLCanvasElement | null {
+    if (this.block.isBlank()) return null;
+    const ink = store.get().ink;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const out = Math.round(size * dpr);
+    const key = `${this.block.rev}|${ink.color}|${ink.level.toFixed(2)}|${out}`;
+    if (this.previewRaster && this.previewKey === key) return this.previewRaster;
+    this.previewRaster = renderImpression(this.block, {
+      color: ink.color,
+      inkLevel: ink.level,
+      out,
+      seed: 0x5eed,
+    });
+    this.previewKey = key;
+    return this.previewRaster;
   }
 
   /** Build an impression bitmap from the current block + ink, ready to place. */
@@ -53,6 +79,18 @@ class Studio {
       s.ink = { ...s.ink, level: Math.max(0.15, s.ink.level - 0.06) };
     });
     return imp;
+  }
+
+  /** Remove the most recently placed impression. Returns true if one was popped. */
+  undoLast(): boolean {
+    let popped = false;
+    store.update((s) => {
+      if (s.impressions.length) {
+        s.impressions.pop();
+        popped = true;
+      }
+    });
+    return popped;
   }
 
   reink() {

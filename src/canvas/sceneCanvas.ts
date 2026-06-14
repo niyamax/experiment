@@ -5,6 +5,15 @@
 import { store } from '../core/store';
 import type { Impression, Viewport } from '../core/types';
 
+/** A ghost stamp drawn under the cursor in press mode (world coords). */
+export interface PressPreview {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  raster: HTMLCanvasElement;
+}
+
 export class SceneCanvas {
   readonly el: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -12,6 +21,7 @@ export class SceneCanvas {
   private raf = 0;
   private dirty = true;
   private paperPattern: CanvasPattern | null = null;
+  private preview: PressPreview | null = null;
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('canvas');
@@ -26,6 +36,21 @@ export class SceneCanvas {
   }
 
   invalidate() {
+    this.dirty = true;
+  }
+
+  /** Set (or clear) the cursor-following press ghost. */
+  setPreview(p: PressPreview | null) {
+    // avoid churn when nothing meaningful changed
+    const a = this.preview;
+    if (!p && !a) return;
+    if (
+      p && a &&
+      p.raster === a.raster && p.x === a.x && p.y === a.y && p.w === a.w && p.h === a.h
+    ) {
+      return;
+    }
+    this.preview = p;
     this.dirty = true;
   }
 
@@ -117,6 +142,19 @@ export class SceneCanvas {
     for (const imp of store.get().impressions) {
       this.drawImpression(ctx, imp, v);
     }
+
+    // cursor-following press ghost (drawn on top, semi-transparent)
+    if (this.preview && store.get().mode === 'press') {
+      const p = this.preview;
+      const s = this.worldToScreen(p.x, p.y);
+      const drawW = p.w * v.zoom;
+      const drawH = p.h * v.zoom;
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.drawImage(p.raster, s.x - drawW / 2, s.y - drawH / 2, drawW, drawH);
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 

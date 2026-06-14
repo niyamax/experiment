@@ -23,9 +23,6 @@ export function attachController(scene: SceneCanvas) {
       el.style.cursor = 'grab';
       e.preventDefault();
     }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-      // global undo only affects carve block; ignore here
-    }
   });
   window.addEventListener('keyup', (e) => {
     if (e.code === 'Space') {
@@ -56,6 +53,22 @@ export function attachController(scene: SceneCanvas) {
     }
   });
 
+  const updatePreview = (e: PointerEvent) => {
+    if (store.get().mode !== 'press' || spaceDown || panning) {
+      scene.setPreview(null);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    const w = scene.screenToWorld(e.clientX - r.left, e.clientY - r.top);
+    const size = store.get().pressSize;
+    const raster = studio.previewImpression(size);
+    if (!raster) {
+      scene.setPreview(null);
+      return;
+    }
+    scene.setPreview({ x: w.x, y: w.y, w: size, h: size, raster });
+  };
+
   el.addEventListener('pointermove', (e) => {
     if (panning) {
       scene.panBy(e.clientX - lastX, e.clientY - lastY);
@@ -76,7 +89,10 @@ export function attachController(scene: SceneCanvas) {
         lastPressY = w.y;
       }
     }
+    updatePreview(e);
   });
+
+  el.addEventListener('pointerleave', () => scene.setPreview(null));
 
   const endPointer = (e: PointerEvent) => {
     if (panning) {
@@ -93,6 +109,11 @@ export function attachController(scene: SceneCanvas) {
   el.addEventListener('pointerup', endPointer);
   el.addEventListener('pointercancel', endPointer);
   el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // hide the ghost whenever we leave press mode
+  store.subscribe(() => {
+    if (store.get().mode !== 'press') scene.setPreview(null);
+  });
 
   el.addEventListener(
     'wheel',

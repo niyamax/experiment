@@ -418,3 +418,60 @@ body {
 .pill-btn:hover {
   border-color: var(--accent);
 }
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+/* ---- empty-canvas onboarding -------------------------------------------- */
+.onboard {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+.onboard.hidden {
+  opacity: 0;
+}
+.onboard-card {
+  text-align: center;
+  padding: 18px 26px;
+  border-radius: var(--radius);
+  background: rgba(243, 236, 224, 0.82);
+  border: 1px solid rgba(216, 203, 180, 0.7);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(4px);
+  max-width: 380px;
+}
+.onboard-title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.onboard-hint {
+  margin-top: 5px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* ---- press "stamp down" feedback ---------------------------------------- */
+.stage.pressed {
+  animation: stamp-down 0.16s ease;
+}
+@keyframes stamp-down {
+  0% {
+    filter: brightness(1);
+  }
+  40% {
+    filter: brightness(0.965);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
