@@ -6,7 +6,8 @@ import { attachController } from '../canvas/controller';
 import { PALETTE, store } from '../core/store';
 import type { Mode } from '../core/types';
 import { studio } from '../engine/studio';
-import { STARTER_STAMPS } from '../data/library';
+import { ALL_STAMPS, COLLECTIONS } from '../data/library';
+import type { LibraryStamp } from '../core/types';
 import { CarveView, GOUGES } from './carveView';
 import { exportCanvasPNG } from './export';
 import { isMuted, setMuted } from './sound';
@@ -177,10 +178,16 @@ function renderPress(panel: HTMLElement) {
   panel.appendChild(button('Export PNG', 'primary-btn', () => exportCanvasPNG()));
 }
 
+let libraryFilter = 'All';
+
 function renderLibrary(panel: HTMLElement) {
-  panel.append(panelTitle('Library', 'Load a motif onto your block.'));
+  panel.append(panelTitle('Library', 'Load a hand-cut motif onto your block.'));
+
+  // collection filter chips
+  const chips = el('div', 'chip-row');
   const grid = el('div', 'stamp-grid');
-  for (const s of STARTER_STAMPS) {
+
+  function makeCell(s: LibraryStamp): HTMLButtonElement {
     const b = document.createElement('button');
     b.className = 'stamp-cell';
     const c = document.createElement('canvas');
@@ -192,14 +199,40 @@ function renderLibrary(panel: HTMLElement) {
     const cap = el('span', 'stamp-cap');
     cap.textContent = s.name;
     b.appendChild(cap);
+    b.title = `${s.name} · ${s.collection}`;
     b.onclick = () => {
       studio.block.loadStamp(s);
       store.set({ mode: 'press' });
     };
-    grid.appendChild(b);
+    return b;
   }
+
+  function fillGrid() {
+    grid.innerHTML = '';
+    const list = libraryFilter === 'All'
+      ? ALL_STAMPS
+      : ALL_STAMPS.filter((s) => s.collection === libraryFilter);
+    for (const s of list) grid.appendChild(makeCell(s));
+  }
+
+  for (const name of ['All', ...COLLECTIONS]) {
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.textContent = name;
+    chip.classList.toggle('active', name === libraryFilter);
+    chip.onclick = () => {
+      libraryFilter = name;
+      chips.querySelectorAll('.chip').forEach((c) =>
+        c.classList.toggle('active', c.textContent === libraryFilter),
+      );
+      fillGrid();
+    };
+    chips.appendChild(chip);
+  }
+
+  panel.appendChild(chips);
+  fillGrid();
   panel.appendChild(grid);
-  panel.appendChild(note('More collections arrive with the Library module.'));
 }
 
 function renderPattern(panel: HTMLElement) {
