@@ -631,14 +631,14 @@ body {
   }
 }
 
-/* ── landscape: the scope owns the middle, so the readouts move to the
-   left gutter where nothing else lives ───────────────────────────────── */
-@media (orientation: landscape) and (max-height: 700px) {
+/* ── landscape: the scope owns the middle at any height, so the readouts
+   move to the left gutter where nothing else lives ───────────────────── */
+@media (orientation: landscape) {
   .score-block {
     top: calc(var(--safe-t) + 108px);
     left: 16px;
     right: auto;
-    width: min(26vw, 260px);
+    width: min(44vw, calc(var(--gutter-score, 100vw) - 26px));
     text-align: left;
   }
   .score {
@@ -653,14 +653,14 @@ body {
     transform: none;
     top: calc(var(--safe-t) + 156px);
     flex-wrap: wrap;
-    max-width: min(26vw, 260px);
+    max-width: min(40vw, calc(var(--gutter-readouts, 100vw) - 26px));
     white-space: normal;
   }
   .toast {
     top: calc(var(--safe-t) + 204px);
     left: 16px;
     right: auto;
-    width: min(26vw, 260px);
+    width: min(40vw, calc(var(--gutter-readouts, 100vw) - 26px));
     text-align: left;
     font-size: clamp(15px, 2vw, 21px);
   }

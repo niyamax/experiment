@@ -1,6 +1,7 @@
 /**
- * Aim + trigger input. Desktop uses pointer lock (raw mouse deltas); touch
- * uses drag-to-aim with tap-to-fire. Both funnel into the same accumulators
+ * Aim + trigger input. Desktop prefers pointer lock (raw mouse deltas); when an
+ * embedder refuses the lock it aims off raw movement instead. Touch uses
+ * drag-to-aim with tap-to-fire. All paths funnel into the same accumulators,
  * which the game drains once per frame.
  */
 export class Input {
@@ -15,6 +16,8 @@ export class Input {
   pausePressed = false;
   holdBreath = false;
   locked = false;
+  /** Set once the embedder makes clear it will not grant pointer lock. */
+  lockUnavailable = false;
 
   private keys = new Set<string>();
   private dragId: number | null = null;
@@ -55,8 +58,34 @@ export class Input {
   }
 
   requestLock() {
-    if (!this.finePointer || this.locked) return;
-    void this.canvas.requestPointerLock?.();
+    if (!this.finePointer || this.locked || this.lockUnavailable) return;
+    const el = this.canvas;
+    if (!el.requestPointerLock) {
+      this.lockUnavailable = true;
+      return;
+    }
+    try {
+      const p = el.requestPointerLock() as unknown as Promise<void> | undefined;
+      if (p && typeof p.catch === 'function') p.catch(() => this.giveUpOnLock());
+    } catch {
+      this.giveUpOnLock();
+      return;
+    }
+    // Embedders that withhold the `pointer-lock` permission reject silently,
+    // so treat "still not locked shortly after asking" as a refusal.
+    window.setTimeout(() => {
+      if (!this.locked) this.giveUpOnLock();
+    }, 700);
+  }
+
+  /**
+   * Fall back to aiming straight off raw mouse movement. Feels close to a
+   * locked pointer and keeps the game playable inside an iframe.
+   */
+  private giveUpOnLock() {
+    // Deliberately does not fire onLockChange: never getting the lock is not
+    // the player stepping away, so the run must not pause.
+    this.lockUnavailable = true;
   }
 
   releaseLock() {
@@ -118,12 +147,12 @@ export class Input {
     if (!this.enabled) return;
 
     if (this.finePointer) {
-      if (!this.locked) {
+      if (!this.locked && !this.lockUnavailable) {
         this.requestLock();
         return; // the click that grabs the pointer should not fire
       }
       if (e.button === 0) this.fireQueue++;
-      if (e.button === 2) this.zoomQueue++;
+      else if (e.button === 2) this.zoomQueue++;
       return;
     }
 
@@ -139,7 +168,7 @@ export class Input {
   private onMove = (e: PointerEvent) => {
     if (!this.enabled) return;
 
-    if (this.locked) {
+    if (this.locked || (this.finePointer && this.lockUnavailable)) {
       this.dx += e.movementX;
       this.dy += e.movementY;
       return;
@@ -194,6 +223,8 @@ export class Input {
 
   private onLockToggle = () => {
     this.locked = document.pointerLockElement === this.canvas;
+    // Losing a lock we never had is not the user stepping away.
+    if (!this.locked && this.lockUnavailable) return;
     this.onLockChange?.(this.locked);
   };
 }

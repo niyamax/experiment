@@ -18,6 +18,8 @@ const ctx = canvas.getContext('2d', { alpha: false })!;
 const screenMenu = $<HTMLDivElement>('screen-menu');
 const screenOver = $<HTMLDivElement>('screen-over');
 const screenPause = $<HTMLDivElement>('screen-pause');
+const scoreBlock = document.querySelector('.score-block') as HTMLElement;
+const readouts = document.querySelector('.readouts') as HTMLElement;
 
 const hud = new Hud();
 const scene = new Scene();
@@ -50,9 +52,31 @@ function resize() {
 
   // HUD elements that must sit clear of the scope need to know where it ends
   const geom = scopeGeom(W, H);
+  const root = document.documentElement.style;
+  root.setProperty('--scope-bottom', `${Math.round(geom.cy + geom.r * 1.16)}px`);
+  fitGutter(scoreBlock, '--gutter-score', 48, geom);
+  fitGutter(readouts, '--gutter-readouts', 26, geom);
+}
+
+/**
+ * How much clear room a left-gutter HUD row has before it meets the scope.
+ * Measured against the chord at that row rather than the circle's widest
+ * point, which would needlessly starve the rows near the top of the frame.
+ * `nominalHeight` keeps this independent of the element's own wrapping, so
+ * narrowing it can never feed back and narrow it again.
+ */
+function fitGutter(
+  el: HTMLElement,
+  name: string,
+  nominalHeight: number,
+  geom: { cx: number; cy: number; r: number },
+) {
+  const R = geom.r * 1.16;
+  const dy = el.getBoundingClientRect().top + nominalHeight - geom.cy;
+  const half = Math.abs(dy) < R ? Math.sqrt(R * R - dy * dy) : 0;
   document.documentElement.style.setProperty(
-    '--scope-bottom',
-    `${Math.round(geom.cy + geom.r * 1.16)}px`,
+    name,
+    `${Math.max(120, Math.round(geom.cx - half))}px`,
   );
 }
 
